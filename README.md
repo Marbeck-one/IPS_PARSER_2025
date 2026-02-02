@@ -18,8 +18,6 @@ El sistema actúa como un **puente de datos**, convirtiendo formatos visuales de
 * **Bruta:** Datos puros para integraciones.
 * **Estilizada:** Formato visual para revisión humana.
 
-
-
 ---
 
 # 🏗️ FASE 1: Extracción y Estandarización
@@ -114,19 +112,25 @@ El sistema analiza la columna `NÚMERO` de la Fase 1.
 | --- | --- |
 | **Fila A (Numerador)** | Toma el código original y agrega `_A`. <br>
 
-<br>
+ |
 
-<br>Ej: `5.4.1.61` ➔ **`5.4.1.61_A`** |
-| **Fila B (Denominador)** | Toma el código original y agrega `_B`. <br>
 
-<br>
 
-<br>Ej: `5.4.1.61` ➔ **`5.4.1.61_B`** |
-| *Caso Especial: Nuevos* | Si el código original está vacío o dice "INDICADOR NUEVO", genera un ID secuencial único para evitar errores.<br>
+Ej: `5.4.1.61` ➔ **`5.4.1.61_A`** |
+| **Fila B (Denominador)** | Toma el código original y agrega `_B`. 
 
-<br>
 
-<br>Ej: `INDICADOR_NUEVO_1_A_CDC`. |
+
+
+
+Ej: `5.4.1.61` ➔ **`5.4.1.61_B`** |
+| *Caso Especial: Nuevos* | Si el código original está vacío o dice "INDICADOR NUEVO", genera un ID secuencial único para evitar errores.
+
+
+
+
+
+Ej: `INDICADOR_NUEVO_1_A_CDC`. |
 
 ### 3. Limpieza de Textos (`nombre_variable` y `descripcion`)
 
@@ -136,22 +140,30 @@ El sistema limpia "basura" sintáctica que viene del Excel original.
 | --- | --- | --- |
 | **Fila A** | `Desc. Op1` | **Regex:** Busca si el texto empieza con `(`. Si es así, lo elimina.<br>
 
-<br>
+ |
 
-<br>Original: `(Sumatoria de hitos...`<br>
 
-<br>
 
-<br>Final: `Sumatoria de hitos...` |
-| **Fila B** | `Desc. Op2` | **Regex:** Busca si el texto termina con `)*100`. Si es así, lo elimina.<br>
+Original: `(Sumatoria de hitos...`
 
-<br>
 
-<br>Original: `...total de hitos)*100`<br>
 
-<br>
 
-<br>Final: `...total de hitos` |
+
+Final: `Sumatoria de hitos...` |
+| **Fila B** | `Desc. Op2` | **Regex:** Busca si el texto termina con `)*100`. Si es así, lo elimina.
+
+
+
+
+
+Original: `...total de hitos)*100`
+
+
+
+
+
+Final: `...total de hitos` |
 
 ### 4. Asignación de Verificadores
 
@@ -230,6 +242,117 @@ El sistema respeta los separadores de sección (`--- CDC VARIABLES ---`) generad
 
 ---
 
+# 📊 FASE 4: Generación de Indicadores IPS
+
+**Salida:** `INDICADORES_IPS_2026.xlsx`
+
+En esta fase, se estructura el catálogo maestro de indicadores, definiendo sus atributos básicos, nombres normalizados y clasificación.
+
+### 1. Limpieza y Normalización de Nombres
+
+El sistema extrae el nombre del indicador eliminando prefijos numéricos y clasificaciones que vienen en el Excel original.
+
+| Columna B (NOMBRE) | Fuente (Fase 1) | Algoritmo de Limpieza |
+| --- | --- | --- |
+| **NOMBRE** | `INDICADOR` | **Regex:** Elimina patrones como `2) Eficacia/Proceso` al inicio del texto, dejando solo el nombre descriptivo del indicador. |
+
+### 2. Definición de Unidad de Medida
+
+El sistema infiere la unidad de medida basándose en el contenido del nombre del indicador.
+
+| Columna E (UNIDAD) | Lógica de Inferencia | Resultado |
+| --- | --- | --- |
+| **%** | Si el nombre contiene "Porcentaje" o "%". | Asigna el símbolo de porcentaje. |
+| **n** | Si el nombre contiene palabras como "Tiempo", "Medidas", "Número", "Cantidad", "Tasa". | Asigna "n" (número). |
+| **?** | Si no puede determinar la unidad con certeza. | Asigna un signo de interrogación para revisión manual. |
+
+### 3. Clasificación y Banderas (Flags)
+
+Se configuran las columnas que indican el tipo de indicador y su origen.
+
+| Columnas X-AI | Lógica de Asignación |
+| --- | --- |
+| **IND_CDC**, **IND_PMG**, **IND_RIESGO** | Se asigna un **1** en la columna correspondiente al origen de la hoja procesada (CDC, PMG o Riesgos) y **0** en las demás. |
+
+### 4. Parámetros Fijos y Configuración
+
+Se establecen valores por defecto para la configuración del indicador en el sistema.
+
+| Columna | Nombre Campo | Valor Asignado | Descripción |
+| --- | --- | --- | --- |
+| **D** | `ACTIVO` | **1** | El indicador se crea en estado activo. |
+| **F** | `RANGO_MINIMO` | **0** | Límite inferior del rango de cumplimiento. |
+| **G** | `RANGO_MAXIMO` | **100** | Límite superior del rango de cumplimiento. |
+| **P** | `FORMULA_COD` | **PORCENTAJE** | Tipo de fórmula estándar. |
+| **S** | `SENTIDO_META` | **1** | Configuración del sentido de la meta. |
+| **T** | `TIPO_META` | **TOLERANCIA** | Tipo de evaluación de la meta. |
+| **U** | `FACTOR_CUMPLIMIENTO` | **10** | Ponderación o factor asociado al cumplimiento. |
+| **V** | `FACTOR_NOCUMPLIMIENTO` | **20** | Ponderación o factor asociado al no cumplimiento. |
+| **W** | `FACTOR_SOBRECUMPLIMIENTO` | **0** | Factor para sobrecumplimiento. |
+| **AJ** | `ANO_ASOCIADO` | **2025** | Año fiscal asociado al indicador. |
+
+---
+
+# 🔗 FASE 5: Generación de Indicadores Aplicados
+
+**Salida:** `INDICADORES_APLICADOS_IPS_2026.xlsx`
+
+Esta es la fase final donde se vinculan los indicadores definidos en la Fase 4 con la estructura organizacional, asignando responsabilidades, metas y fórmulas de cálculo.
+
+### 1. Cruce con Estructura Organizacional (`COD_PONDERADO`)
+
+El sistema realiza un cruce inteligente entre el nombre del "Responsable" en la planilla Excel y un mapa interno de códigos de departamento (`MAPA_PONDERADOS_INTERNO`).
+
+* **Normalización Nuclear:** Para asegurar el cruce, tanto el nombre en el Excel como en el mapa interno se normalizan agresivamente:
+* Se eliminan tildes (ej: `Jurídica` -> `JURIDICA`).
+* Se eliminan espacios (ej: `Depto Finanzas` -> `DEPTOFINANZAS`).
+* Se elimina el prefijo "CDC".
+* Se convierte todo a mayúsculas.
+
+
+* **Resultado:** Si hay coincidencia, se asigna el código correspondiente (ej: `IP25_715`). Si no, se asigna un `?` para alertar la falta de coincidencia.
+
+### 2. Generación de Códigos Automáticos (`COD_VAR_AUTO`)
+
+Se construye el código de variable automática basado en el código ponderado encontrado.
+
+| Columna AV (COD_VAR_AUTO) | Lógica |
+| --- | --- |
+| **A_IP25_XXX** | Se concatena el prefijo `A_` con el `COD_PONDERADO`. |
+| **?** | Si no se encontró el `COD_PONDERADO` (es decir, es `?`), se deja un signo de interrogación. |
+
+### 3. Asignación de Metas y Ponderaciones
+
+Se extraen los valores cuantitativos desde la planilla de origen.
+
+| Columna | Nombre Campo | Fuente | Lógica |
+| --- | --- | --- | --- |
+| **AR** | `META_202512` | Columna "Meta 2025" | Se copia el valor de la meta anual. |
+| **AS** | `Ponderacion` | Columna "Ponderador" | Se extrae solo para indicadores CDC. Para PMG y Riesgos se deja vacío. |
+
+### 4. Configuración de Componentes (`COMP_A` y `COMP_B`)
+
+Se definen los componentes del indicador, vinculándolos con las variables generadas en la Fase 2.
+
+| Columna | Nombre Campo | Lógica |
+| --- | --- | --- |
+| **AI** | `COMP_A` | Se asigna el código del indicador más el sufijo `_A` (Numerador). |
+| **AM** | `COMP_B` | Se asigna el código del indicador más el sufijo `_B` (Denominador). |
+
+### 5. Configuración Anual y Mensual
+
+Se establece la vigencia y la operatividad mensual del indicador aplicado.
+
+| Columna | Nombre Campo | Valor Asignado | Descripción |
+| --- | --- | --- | --- |
+| **H** | `ANO_MES_INI` | **202501** | Inicio de vigencia. |
+| **I** | `ANO_MES_FIN` | **202512** | Fin de vigencia. |
+| **M - X** | `ENE` ... `DIC` | **1** | Indica que el indicador opera en todos los meses. |
+| **AH** | `TIPO_META_ANUAL` | **PERIODO_ANUAL** | Define el tipo de evaluación de la meta. |
+| **AU** | `FORMULA_VAR_AUTO` | **SUMA_ANUAL** | Fórmula para el cálculo automático. |
+
+---
+
 ### Resumen del Flujo de Datos Global
 
 1. **Excel Original:** Datos en "bloques" 3D.
@@ -239,3 +362,7 @@ El sistema respeta los separadores de sección (`--- CDC VARIABLES ---`) generad
 3. **Variables IPS:** Desglose en filas A/B + Limpieza.
 ⬇️ *Aplicador Fase 3*
 4. **Variables Aplicadas:** Prefijos, Correos y Configuración Anual.
+⬇️ *Transformador Fase 4*
+5. **Indicadores IPS:** Catálogo maestro con nombres limpios y unidades.
+⬇️ *Vinculador Fase 5*
+6. **Indicadores Aplicados:** Conexión con departamentos y metas.

@@ -34,13 +34,13 @@ ARCHIVOS = {
     "MAESTRO": "Proyecciones Indicadores 2025 - División Planificación (1).xlsx",
     
     # Salida Fase 1: Planilla estandarizada con nombre dinámico
-    "GESTION": f"Planilla Estilizada SIG - {NOMBRE_DIVISION}.xlsx", 
+    "GESTION": f"1_Planilla Estilizada SIG - {NOMBRE_DIVISION}.xlsx", 
     
     # Salidas del Sistema (Carga Masiva)
-    "VARS_IPS": "VARIABLES_IPS_2026.xlsx",
-    "VARS_APP": "VARIABLES_APLICADAS_IPS_2026.xlsx",
-    "INDS_IPS": "INDICADORES_IPS_2026.xlsx",
-    "INDS_APP": "INDICADORES_APLICADOS_IPS_2026.xlsx"
+    "VARS_IPS": "2_VARIABLES_IPS_2026.xlsx",
+    "VARS_APP": "3_VARIABLES_APLICADAS_IPS_2026.xlsx",
+    "INDS_IPS": "4_INDICADORES_IPS_2026.xlsx",
+    "INDS_APP": "5_INDICADORES_APLICADOS_IPS_2026.xlsx"
 }
 
 # Mapeo de Hojas en el Excel Maestro
