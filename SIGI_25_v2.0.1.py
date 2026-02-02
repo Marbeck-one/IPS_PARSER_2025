@@ -1,17 +1,12 @@
 """
 =============================================================================
  PROGRAMA: SIGI 25 (Sistema Integral de Gestión de Indicadores)
- VERSIÓN:  v2.0.0 (Master Release)
+ VERSIÓN:  v2.0.1 (Styling Fix)
  FECHA:    Febrero 2026
  
  DESCRIPCIÓN:
- Motor ETL que procesa planillas de planificación 2025 y genera los paquetes
- de carga y visualización para el sistema IPS 2026.
- 
- ESTRUCTURA DE SALIDA:
- 1. Archivo de Extracción (Fase 1)
- 2. Archivo de Carga Bruta (Fases 2-5)
- 3. Archivo de Reporte Visual (Fases 2-5 Estilizadas)
+ Motor ETL con módulo de estilos mejorado para asegurar legibilidad en
+ las planillas Excel generadas (Auto-ajuste, Wrap Text, Bordes).
 =============================================================================
 """
 
@@ -21,6 +16,7 @@ import re
 import unicodedata
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
+from openpyxl.utils import get_column_letter
 
 # =============================================================================
 # 1. CONFIGURACIÓN DEL ENTORNO
@@ -29,14 +25,10 @@ from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
 NOMBRE_DIVISION = "División Planificación" 
 ANO_PROCESO = "2026"
 
-# Nombres de Archivos Finales
 ARCHIVOS = {
     "MAESTRO": "Proyecciones Indicadores 2025 - División Planificación (1).xlsx",
-    # Salida Fase 1
     "F1_EXTRACCION": f"1_PLANILLA_SIG_{NOMBRE_DIVISION}_{ANO_PROCESO}.xlsx",
-    # Salida Paquete Técnico
     "PAQUETE_CARGA": f"2_CARGA_BRUTA_{NOMBRE_DIVISION}_{ANO_PROCESO}.xlsx",
-    # Salida Paquete Visual
     "PAQUETE_VISUAL": f"3_REPORTE_VISUAL_{NOMBRE_DIVISION}_{ANO_PROCESO}.xlsx"
 }
 
@@ -59,8 +51,85 @@ MAPA_PONDERADOS_INTERNO = {
 }
 
 # =============================================================================
-# 2. FUNCIONES DE LIMPIEZA
+# 2. MOTOR DE ESTILOS PROFESIONAL (NUEVO)
 # =============================================================================
+
+def aplicar_estilo_profesional(ruta_archivo, nombre_hoja):
+    """
+    Aplica formato visual completo:
+    - Encabezados: Fondo Azul Oscuro, Texto Blanco, Negrita.
+    - Cuerpo: Bordes finos, Alineación superior.
+    - Columnas: Ajuste de ancho inteligente (máximo 60).
+    - Texto Largo: Wrap Text activado para que no se corte.
+    """
+    print(f"   -> Estilizando hoja: {nombre_hoja} en {os.path.basename(ruta_archivo)}...")
+    
+    try:
+        wb = load_workbook(ruta_archivo)
+        if nombre_hoja not in wb.sheetnames: return
+        ws = wb[nombre_hoja]
+
+        # Estilos Base
+        header_fill = PatternFill("solid", fgColor="1F4E78") # Azul Corporativo
+        header_font = Font(b=True, color="FFFFFF", size=10)
+        border_style = Side(style="thin", color="000000")
+        border = Border(left=border_style, right=border_style, top=border_style, bottom=border_style)
+        alignment_center = Alignment(horizontal="center", vertical="top", wrap_text=True)
+        alignment_left = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+        # 1. Formatear Encabezados
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = alignment_center
+            cell.border = border
+
+        # 2. Formatear Cuerpo y Separadores
+        max_col = ws.max_column
+        max_row = ws.max_row
+        
+        for row in ws.iter_rows(min_row=2, max_row=max_row, max_col=max_col):
+            # Detectar si es fila separadora (--- CDC ---)
+            es_separador = str(row[0].value).startswith("---")
+            
+            for cell in row:
+                cell.border = border
+                if es_separador:
+                    cell.font = Font(b=True, size=11)
+                    cell.fill = PatternFill("solid", fgColor="D9D9D9") # Gris suave
+                else:
+                    cell.alignment = alignment_left
+                    cell.font = Font(size=10)
+
+        # 3. Ajuste Inteligente de Ancho de Columnas
+        for col_idx in range(1, max_col + 1):
+            col_letter = get_column_letter(col_idx)
+            # Definir anchos fijos aproximados según tipo de dato probable
+            # Columnas cortas (IDs, Flags, Años) vs Largas (Descripciones)
+            
+            # Muestrear longitud del contenido
+            max_len = 0
+            for i in range(1, min(max_row, 50)): # Muestrear primeras 50 filas para velocidad
+                val = ws.cell(row=i, column=col_idx).value
+                if val: max_len = max(max_len, len(str(val)))
+            
+            # Lógica de ancho
+            if max_len > 80: width = 60 # Tope máximo para textos muy largos
+            elif max_len > 40: width = 45
+            elif max_len > 20: width = 25
+            else: width = 15
+            
+            ws.column_dimensions[col_letter].width = width
+
+        wb.save(ruta_archivo)
+        
+    except Exception as e:
+        print(f"      [ADVERTENCIA] No se pudo aplicar estilo a {nombre_hoja}: {e}")
+
+# =============================================================================
+# 3. FUNCIONES DE LIMPIEZA
+# =============================================================================
+# (Mismas funciones de limpieza que la v2.0.0, sin cambios)
 
 def limpiar_porcentaje_real(val):
     if pd.isna(val) or val == "" or str(val).lower() == "no aplica": return val
@@ -93,16 +162,13 @@ def detectar_encabezados(df):
 def transformar_codigo_para_var_auto(cod_variable):
     cod_str = str(cod_variable).strip()
     if cod_str.startswith("---"): return None
-    
     if "INDICADOR_NUEVO" in cod_str:
         parts = cod_str.split('_')
         if len(parts) >= 5: return f"{parts[-2]}_{'_'.join(parts[:-2])}_{parts[-1]}"
         elif len(parts) == 4: return f"{parts[-1]}_{'_'.join(parts[:-1])}"
-        
     elif '_' in cod_str:
         parts = cod_str.rsplit('_', 1) 
-        if len(parts) == 2: return f"{parts[1]}_{parts[0]}" # Corregido parts
-        
+        if len(parts) == 2: return f"{parts[1]}_{parts[0]}"
     return cod_str
 
 def parsear_nombre_indicador(texto_bruto):
@@ -135,12 +201,12 @@ def normalizar_clave_responsable(texto):
     return txt
 
 # =============================================================================
-# 3. LÓGICA DE TRANSFORMACIÓN (FASES)
+# 4. LÓGICA DE TRANSFORMACIÓN (FASES)
 # =============================================================================
 
-# --- FASE 1 ---
+# --- FASE 1: EXTRACCIÓN ---
 def obtener_dataframe_hoja(ruta_archivo, nombre_hoja_excel, etiqueta_log):
-    print(f"   -> Extrayendo: {etiqueta_log}...")
+    print(f"   -> Extrayendo datos de: {etiqueta_log}...")
     try: df_raw = pd.read_excel(ruta_archivo, sheet_name=nombre_hoja_excel, header=None)
     except: return None
     try: idx_header, encabezados = detectar_encabezados(df_raw)
@@ -243,7 +309,6 @@ def generar_fase_2(dataframes_input):
             for index, row in dataframes_input[etiqueta].iterrows():
                 raw_num = row.get('NÚMERO', ''); codigo_str = str(raw_num).strip()
                 es_nuevo = "NUEVO" in codigo_str.upper() or "INDICADOR" in codigo_str.upper() or codigo_str == "nan" or not codigo_str
-                
                 if es_nuevo:
                     cod_A = f"INDICADOR_NUEVO_{contador_global}_A_{etiqueta}"; cod_B = f"INDICADOR_NUEVO_{contador_global}_B_{etiqueta}"; contador_global += 1
                 else:
@@ -251,7 +316,6 @@ def generar_fase_2(dataframes_input):
 
                 nombre_A = limpiar_op1_inicio(row.get('Desc. Op1', '')); nombre_B = limpiar_op2_final(row.get('Desc. Op2', ''))
                 medios = str(row.get('Medios Verificación', '')).strip() if pd.notna(row.get('Medios Verificación', '')) else ""
-                
                 base = {'APLICA_DIST_GENERO': 0, 'APLICA_DESP_TERRITORIAL': 0, 'APLICA_SIN_INFORMACION': 1, 'APLICA_VAL_PERS_JUR': 0, 'requiere_medio': 0, 'texto_ayuda': None, 'unidad': None, 'valor_obligatorio': 1, 'permite_medio_escrito': 1, 'usa_ultimo_valor_ano': 1}
                 fA = base.copy(); fA.update({'cod_interno': cod_A, 'nombre_variable': nombre_A, 'descripcion': nombre_A, 'medio_verificacion': medios})
                 fB = base.copy(); fB.update({'cod_interno': cod_B, 'nombre_variable': nombre_B, 'descripcion': nombre_B, 'medio_verificacion': medios})
@@ -272,7 +336,6 @@ def generar_fase_3(df_fase2):
         cod = str(row.get('cod_interno', '')).strip()
         if cod.startswith("---"):
             filas.append({'cod_variable': cod}); continue
-        
         fila = {
             'cod_variable': cod, 'nombre_variable': row.get('nombre_variable', ''),
             'ano_mes_ini': 202501, 'ano_mes_fin': 202512,
@@ -364,32 +427,7 @@ def generar_fase_5(dataframes_input):
     return pd.concat(dfs_consolidados, ignore_index=True).reindex(columns=cols_orden) if dfs_consolidados else pd.DataFrame()
 
 # =============================================================================
-# BLOQUE 6: UTILS ESTILOS
-# =============================================================================
-def aplicar_estilos_genericos(ruta, hoja, col_clave, ancho_col=50):
-    try:
-        wb = load_workbook(ruta)
-        if hoja not in wb.sheetnames: return
-        ws = wb[hoja]
-        bold = Font(b=True)
-        for row in ws.iter_rows():
-            val = str(row[0].value)
-            if val.startswith("---"):
-                for c in row: c.font = bold
-        ws.column_dimensions[col_clave].width = ancho_col
-        wb.save(ruta)
-    except: pass
-
-def aplicar_estilos_planillas(ruta, hoja):
-    try:
-        wb = load_workbook(ruta); ws = wb[hoja]
-        header = PatternFill("solid", fgColor="1F4E78"); font = Font(b=True, color="FFFFFF")
-        for cell in ws[1]: cell.fill = header; cell.font = font
-        wb.save(ruta)
-    except: pass
-
-# =============================================================================
-# BLOQUE 7: ORQUESTACIÓN FINAL (EL GENERADOR DE PAQUETES)
+# 5. ORQUESTACIÓN FINAL
 # =============================================================================
 
 def ejecutar_todo():
@@ -412,7 +450,9 @@ def ejecutar_todo():
     with pd.ExcelWriter(ARCHIVOS["F1_EXTRACCION"], engine='openpyxl') as writer:
         df_fase1.to_excel(writer, sheet_name="DATOS_BRUTOS", index=False)
         df_fase1.to_excel(writer, sheet_name="DATOS_ESTILIZADOS", index=False)
-    aplicar_estilos_planillas(ARCHIVOS["F1_EXTRACCION"], "DATOS_ESTILIZADOS")
+    
+    # Aplicar Estilos Mejorados a Fase 1
+    aplicar_estilo_profesional(ARCHIVOS["F1_EXTRACCION"], "DATOS_ESTILIZADOS")
 
     # 2. GENERAR DATAFRAMES EN MEMORIA
     print("   -> Procesando Fases 2, 3, 4, 5 en memoria...")
@@ -437,9 +477,9 @@ def ejecutar_todo():
         df_f4.to_excel(writer, sheet_name="VISUAL_INDICADORES", index=False)
         df_f5.to_excel(writer, sheet_name="VISUAL_IND_APP", index=False)
     
-    # Estilizar Reporte Visual
+    # Aplicar Estilos Mejorados a Reporte Visual
     for hoja in ["VISUAL_VARIABLES", "VISUAL_VAR_APP", "VISUAL_INDICADORES", "VISUAL_IND_APP"]:
-        aplicar_estilos_genericos(ARCHIVOS["PAQUETE_VISUAL"], hoja, "B")
+        aplicar_estilo_profesional(ARCHIVOS["PAQUETE_VISUAL"], hoja)
 
     print("\n   ¡PROCESO FINALIZADO CON ÉXITO!")
     print(f"   1. {ARCHIVOS['F1_EXTRACCION']}")
@@ -449,7 +489,7 @@ def ejecutar_todo():
 def menu_principal():
     while True:
         print("\n" + "="*60)
-        print(f"   PROGRAMA: SIGI 25 v2.0.0")
+        print(f"   PROGRAMA: SIGI 25 v2.0.1")
         print(f"   DIVISIÓN: {NOMBRE_DIVISION}")
         print("="*60)
         print("   1. Ejecutar TODO (Genera los 3 Archivos Finales)")
